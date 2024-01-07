@@ -1,54 +1,13 @@
 #![feature(let_chains, ascii_char)]
-use std::{fs::File, io::Read, path::Path, process::Command};
+use std::{fmt::Write, fs::File, io::Read, path::Path, process::Command};
 
 use colored::Colorize;
-use rustyline::completion::FilenameCompleter;
-use rustyline::{error::ReadlineError, hint::HistoryHinter, history::DefaultHistory};
-use rustyline::{Completer, Helper, Highlighter, Hinter, Validator};
+use fuzzy_matcher::FuzzyMatcher;
+use rustyline::hint::Hinter;
+use rustyline::{error::ReadlineError, history::DefaultHistory};
+use rustyline::{Completer, Helper, Highlighter, Validator};
 
-#[derive(Helper, Completer, Hinter, Validator, Highlighter)]
-struct MyHelper {
-    #[rustyline(Completer)]
-    completer: FilenameCompleter,
-    #[rustyline(Hinter)]
-    hinter: HistoryHinter,
-}
-
-fn main() {
-    ctrlc::set_handler(|| {}).unwrap();
-    let justfile = read();
-    print_rules(justfile);
-
-    let mut rl = rustyline::Editor::<MyHelper, DefaultHistory>::new().unwrap();
-    rl.set_helper(Some(MyHelper {
-        completer: FilenameCompleter::new(),
-        hinter: HistoryHinter::new(),
-    }));
-
-    let prompt = format!("{}> ", "Just".bold().red());
-    loop {
-        let line = rl.readline(&prompt);
-        let line = match line {
-            Ok(line) => line,
-            Err(ReadlineError::Interrupted | ReadlineError::Eof) => {
-                break;
-            }
-            Err(err) => {
-                println!("Error: {:?}", err);
-                break;
-            }
-        };
-        let r = run(line.split_whitespace());
-        if r.success() {
-            rl.add_history_entry(&line).unwrap();
-        } else {
-            eprintln!(
-                "! exit code: {}",
-                r.code().unwrap().to_string().bold().red()
-            );
-        }
-    }
-}
+type Matcher = fuzzy_matcher::skim::SkimMatcherV2;
 
 // Rule has one of the forms:
 // - <rule>: [deps]
@@ -68,6 +27,124 @@ struct Alias {
 struct Justfile {
     rules: Vec<Rule>,
     aliases: Vec<Alias>,
+}
+
+thread_local! {
+    static MATCHER: Matcher = Matcher::default();
+}
+
+impl Justfile {
+    fn matches(&self, pattern: &str) -> Vec<(&Rule, (i64, Vec<usize>))> {
+        MATCHER.with(|m| {
+            let mut matches: Vec<_> = self
+                .rules
+                .iter()
+                .filter_map(|r| Some((r, m.fuzzy_indices(&r.name, pattern)?)))
+                .collect();
+            matches.sort_by_key(|(_r, (match_score, _indices))| -*match_score);
+            matches
+        })
+    }
+    fn best_match(&self, pattern: Option<&str>) -> Option<&Rule> {
+        let pattern = pattern.unwrap_or("");
+        if pattern.is_empty() {
+            return self.rules.first();
+        }
+        MATCHER.with(|m| {
+            let (_score, rule) = self
+                .rules
+                .iter()
+                .rev()
+                .filter_map(|r| Some((m.fuzzy_match(&r.name, pattern)?, r)))
+                .max_by_key(|&(match_score, _)| match_score)?;
+            Some(rule)
+        })
+    }
+}
+
+#[derive(Helper, Completer, Validator, Highlighter)]
+struct MyHinter<'j> {
+    justfile: &'j Justfile,
+}
+
+impl<'j> Hinter for MyHinter<'j> {
+    type Hint = String;
+
+    fn hint(&self, line: &str, pos: usize, _ctx: &rustyline::Context<'_>) -> Option<String> {
+        let matches = self.justfile.matches(line);
+        if matches.is_empty() {
+            return None;
+        }
+
+        let mut s = String::new();
+        let mut first = true;
+        for (rule, (_score, match_positions)) in &matches[..matches.len().min(10)] {
+            if !first {
+                s.push_str(", ");
+            }
+            let mut j = 0;
+            for (i, c) in rule.name.chars().enumerate() {
+                if match_positions.get(j) == Some(&i) {
+                    if first {
+                        s.push_str(&format!("{}", c.to_string().bold().underline().green()));
+                    } else {
+                        s.push_str(&format!("{}", c.to_string().bold().underline()));
+                    }
+                    j += 1;
+                } else {
+                    if first {
+                        s.push_str(&format!("{}", c.to_string().bold().green()));
+                    } else {
+                        s.push(c);
+                    }
+                }
+            }
+            first = false;
+        }
+
+        let padding = (pos + 1).next_multiple_of(10) - pos;
+        Some(format!(" {:>padding$}({s})", "", padding = padding))
+    }
+}
+
+fn main() {
+    ctrlc::set_handler(|| {}).unwrap();
+    let justfile = read();
+    print_rules(&justfile);
+
+    let mut rl = rustyline::Editor::<MyHinter, DefaultHistory>::new().unwrap();
+    rl.set_helper(Some(MyHinter {
+        justfile: &justfile,
+    }));
+
+    rl.bind_sequence(rustyline::KeyEvent::ctrl('k'), rustyline::Cmd::AcceptLine);
+
+    let prompt = format!("{}> ", "Just".bold().red());
+    loop {
+        let line = rl.readline(&prompt);
+        let line = match line {
+            Ok(line) => line,
+            Err(ReadlineError::Interrupted | ReadlineError::Eof) => {
+                break;
+            }
+            Err(err) => {
+                println!("Error: {:?}", err);
+                break;
+            }
+        };
+        let mut args = line.split_whitespace();
+        let rule = justfile.best_match(args.next()).unwrap();
+
+        let r = run(rule, args);
+        if r.success() {
+            rl.add_history_entry(&line).unwrap();
+        } else {
+            eprintln!(
+                "! exit code: {}",
+                r.code().unwrap().to_string().bold().red()
+            );
+        }
+    }
 }
 
 fn read() -> Justfile {
@@ -107,25 +184,26 @@ fn read() -> Justfile {
     Justfile { rules, aliases }
 }
 
-fn print_rules(justfile: Justfile) {
-    for rule in justfile.rules {
+fn print_rules(justfile: &Justfile) {
+    for rule in &justfile.rules {
         eprint!("{}", rule.name);
-        for arg in rule.args {
+        for arg in &rule.args {
             eprint!(" {}", arg);
         }
         eprintln!();
     }
-    for alias in justfile.aliases {
+    for alias in &justfile.aliases {
         eprintln!("{}: {}", alias.alias, alias.rule);
     }
 }
 
-fn run<I, S>(args: I) -> std::process::ExitStatus
+fn run<I, S>(r: &Rule, args: I) -> std::process::ExitStatus
 where
     I: IntoIterator<Item = S>,
     S: AsRef<std::ffi::OsStr>,
 {
     Command::new("just")
+        .arg(&r.name)
         .args(args)
         .spawn()
         .unwrap()
