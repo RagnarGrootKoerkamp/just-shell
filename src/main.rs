@@ -1,5 +1,5 @@
 #![feature(let_chains, ascii_char)]
-use std::{fmt::Write, fs::File, io::Read, path::Path, process::Command};
+use std::{fs::File, io::Read, path::Path, process::Command};
 
 use colored::Colorize;
 use fuzzy_matcher::FuzzyMatcher;
