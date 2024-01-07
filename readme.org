@@ -2,12 +2,18 @@
 
 A very minimal shell to invoke [[https://github.com/casey/just][`just`]] commands with aggressive auto-completion.
 
-- Install :: =cargo install just-shell=
+- Install ::
+  - =cargo install just-shell=
+  - I recommend aliasing it to e.g. =js= in your shell.
 - Features ::
   - Fuzzyfind rules using [[https://crates.io/crates/fuzzy-matcher][=fuzzy-matcher=]].
   - Interactive shell using [[https://crates.io/crates/rustyline][=rustyline=]].
 - TODO ::
+  - Print executed rule.
+  - Hide the shell command printed by just
   - Aliases
   - Arguments
   - History
   - Ordering by usage count
+
+[[https://asciinema.org/a/4KZpurHoiwrdRaugU5DS5JW35][file:https://asciinema.org/a/4KZpurHoiwrdRaugU5DS5JW35.svg]]
