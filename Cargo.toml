@@ -6,6 +6,8 @@ edition = "2021"
 description = "A minimal shell around just-files"
 license = "MIT"
 repository = "https://github.com/RagnarGrootKoerkamp/just-shell"
+keywords = ["just", "shell"]
+categories = ["command-line-utilities"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
