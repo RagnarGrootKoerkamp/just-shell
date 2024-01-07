@@ -15,6 +15,7 @@ struct MyHelper {
 }
 
 fn main() {
+    ctrlc::set_handler(|| {}).unwrap();
     let justfile = read();
     print_rules(justfile);
 
