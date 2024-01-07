@@ -2,6 +2,43 @@
 use std::{fs::File, io::Read, path::Path, process::Command};
 
 use colored::Colorize;
+use rustyline::error::ReadlineError;
+
+fn main() {
+    let justfile = read();
+    print_rules(justfile);
+
+    let mut rl = rustyline::DefaultEditor::new().unwrap();
+
+    let prompt = format!("{}> ", "Just".bold().red());
+    loop {
+        let line = rl.readline(&prompt);
+        let line = match line {
+            Ok(line) => line,
+            Err(ReadlineError::Interrupted | ReadlineError::Eof) => {
+                break;
+            }
+            Err(err) => {
+                println!("Error: {:?}", err);
+                break;
+            }
+        };
+        let r = Command::new("just")
+            .args(line.split_whitespace())
+            .spawn()
+            .unwrap()
+            .wait()
+            .unwrap();
+        if r.success() {
+            rl.add_history_entry(&line).unwrap();
+        } else {
+            eprintln!(
+                "! exit code: {}",
+                r.code().unwrap().to_string().bold().red()
+            );
+        }
+    }
+}
 
 // Rule has one of the forms:
 // - <rule>: [deps]
@@ -60,8 +97,7 @@ fn read() -> Justfile {
     Justfile { rules, aliases }
 }
 
-fn main() {
-    let justfile = read();
+fn print_rules(justfile: Justfile) {
     for rule in justfile.rules {
         eprint!("{}", rule.name);
         for arg in rule.args {
@@ -71,25 +107,5 @@ fn main() {
     }
     for alias in justfile.aliases {
         eprintln!("{}: {}", alias.alias, alias.rule);
-    }
-    loop {
-        eprint!("{}> ", "Just".bold().red());
-        let mut line = String::new();
-        std::io::stdin().read_line(&mut line).unwrap();
-        if line.is_empty() {
-            break;
-        }
-        let r = Command::new("just")
-            .args(line.split_whitespace())
-            .spawn()
-            .unwrap()
-            .wait()
-            .unwrap();
-        if !r.success() {
-            eprintln!(
-                "! exit code: {}",
-                r.code().unwrap().to_string().bold().red()
-            );
-        }
     }
 }
