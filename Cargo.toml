@@ -1,7 +1,11 @@
 [package]
 name = "just-shell"
 version = "0.1.0"
+authors = ["Ragnar Groot Koerkamp"]
 edition = "2021"
+description = "A minimal shell around just-files"
+license = "MIT"
+repository = "https://github.com/RagnarGrootKoerkamp/just-shell"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
