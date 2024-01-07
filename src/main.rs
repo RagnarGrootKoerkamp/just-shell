@@ -29,12 +29,7 @@ fn main() {
         let line = rl.readline(&prompt);
         let line = match line {
             Ok(line) => line,
-            Err(ReadlineError::Interrupted) => {
-                eprintln!("ctrl C end");
-                continue;
-            }
-            Err(ReadlineError::Eof) => {
-                eprintln!("ctrl D");
+            Err(ReadlineError::Interrupted | ReadlineError::Eof) => {
                 break;
             }
             Err(err) => {
@@ -42,12 +37,7 @@ fn main() {
                 break;
             }
         };
-        let r = Command::new("just")
-            .args(line.split_whitespace())
-            .spawn()
-            .unwrap()
-            .wait()
-            .unwrap();
+        let r = run(line.split_whitespace());
         if r.success() {
             rl.add_history_entry(&line).unwrap();
         } else {
@@ -127,4 +117,17 @@ fn print_rules(justfile: Justfile) {
     for alias in justfile.aliases {
         eprintln!("{}: {}", alias.alias, alias.rule);
     }
+}
+
+fn run<I, S>(args: I) -> std::process::ExitStatus
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<std::ffi::OsStr>,
+{
+    Command::new("just")
+        .args(args)
+        .spawn()
+        .unwrap()
+        .wait()
+        .unwrap()
 }
