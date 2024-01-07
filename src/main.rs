@@ -1,3 +1,4 @@
+#![allow(unused)]
 #![feature(let_chains, ascii_char)]
 use std::{fs::File, io::Read, path::Path, process::Command};
 
@@ -76,12 +77,23 @@ impl<'j> Hinter for MyHinter<'j> {
             return None;
         }
 
+        let mut len = 0;
         let mut s = String::new();
         let mut first = true;
-        for (rule, (_score, match_positions)) in &matches[..matches.len().min(10)] {
+
+        let offset = (pos + 1).next_multiple_of(10);
+        let cols = termion::terminal_size().unwrap().0;
+        let max_len = cols as usize - offset - 13;
+
+        for (rule, (_score, match_positions)) in &matches[..matches.len()] {
             if !first {
                 s.push_str(", ");
             }
+            if len + rule.name.len() >= max_len {
+                s.push_str("...");
+                break;
+            }
+            len += rule.name.len() + 2;
             let mut j = 0;
             for (i, c) in rule.name.chars().enumerate() {
                 if match_positions.get(j) == Some(&i) {
@@ -102,7 +114,7 @@ impl<'j> Hinter for MyHinter<'j> {
             first = false;
         }
 
-        let padding = (pos + 1).next_multiple_of(10) - pos;
+        let padding = offset - pos;
         Some(format!(" {:>padding$}({s})", "", padding = padding))
     }
 }
@@ -110,7 +122,6 @@ impl<'j> Hinter for MyHinter<'j> {
 fn main() {
     ctrlc::set_handler(|| {}).unwrap();
     let justfile = read();
-    print_rules(&justfile);
 
     let mut rl = rustyline::Editor::<MyHinter, DefaultHistory>::new().unwrap();
     rl.set_helper(Some(MyHinter {
@@ -150,10 +161,14 @@ fn main() {
 fn read() -> Justfile {
     let justfile_path = Path::new("justfile");
     let mut justfile = String::new();
-    File::open(justfile_path)
-        .unwrap()
-        .read_to_string(&mut justfile)
-        .unwrap();
+    let Ok(mut file) = File::open(justfile_path) else {
+        eprintln!(
+            "{}",
+            "Error: no justfile in current directory.".bold().red()
+        );
+        std::process::exit(1);
+    };
+    file.read_to_string(&mut justfile).unwrap();
 
     let mut rules = Vec::new();
     let mut aliases = Vec::new();
@@ -182,19 +197,6 @@ fn read() -> Justfile {
     }
 
     Justfile { rules, aliases }
-}
-
-fn print_rules(justfile: &Justfile) {
-    for rule in &justfile.rules {
-        eprint!("{}", rule.name);
-        for arg in &rule.args {
-            eprint!(" {}", arg);
-        }
-        eprintln!();
-    }
-    for alias in &justfile.aliases {
-        eprintln!("{}: {}", alias.alias, alias.rule);
-    }
 }
 
 fn run<I, S>(r: &Rule, args: I) -> std::process::ExitStatus

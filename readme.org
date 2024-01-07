@@ -1,0 +1,3 @@
+* Just-Shell
+
+A minimal shell to invoke [[https://github.com/casey/just][`just`]] commands.

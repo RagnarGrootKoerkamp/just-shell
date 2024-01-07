@@ -10,3 +10,4 @@ colored = "2.1.0"
 ctrlc = "3.4.2"
 fuzzy-matcher = "0.3.7"
 rustyline = { version = "13.0.0", features = ["derive"] }
+termion = "3.0.0"
