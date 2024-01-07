@@ -1,3 +1,13 @@
 * Just-Shell
 
-A minimal shell to invoke [[https://github.com/casey/just][`just`]] commands.
+A very minimal shell to invoke [[https://github.com/casey/just][`just`]] commands with aggressive auto-completion.
+
+- Install :: =cargo install just-shell=
+- Features ::
+  - Fuzzyfind rules using [[https://crates.io/crates/fuzzy-matcher][=fuzzy-matcher=]].
+  - Interactive shell using [[https://crates.io/crates/rustyline][=rustyline=]].
+- TODO ::
+  - Aliases
+  - Arguments
+  - History
+  - Ordering by usage count
