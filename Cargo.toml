@@ -1,6 +1,6 @@
 [package]
 name = "just-shell"
-version = "0.1.0"
+version = "0.1.2"
 authors = ["Ragnar Groot Koerkamp"]
 edition = "2021"
 description = "A minimal shell around just-files"
