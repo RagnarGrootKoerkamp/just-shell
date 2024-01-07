@@ -2,20 +2,39 @@
 use std::{fs::File, io::Read, path::Path, process::Command};
 
 use colored::Colorize;
-use rustyline::error::ReadlineError;
+use rustyline::completion::FilenameCompleter;
+use rustyline::{error::ReadlineError, hint::HistoryHinter, history::DefaultHistory};
+use rustyline::{Completer, Helper, Highlighter, Hinter, Validator};
+
+#[derive(Helper, Completer, Hinter, Validator, Highlighter)]
+struct MyHelper {
+    #[rustyline(Completer)]
+    completer: FilenameCompleter,
+    #[rustyline(Hinter)]
+    hinter: HistoryHinter,
+}
 
 fn main() {
     let justfile = read();
     print_rules(justfile);
 
-    let mut rl = rustyline::DefaultEditor::new().unwrap();
+    let mut rl = rustyline::Editor::<MyHelper, DefaultHistory>::new().unwrap();
+    rl.set_helper(Some(MyHelper {
+        completer: FilenameCompleter::new(),
+        hinter: HistoryHinter::new(),
+    }));
 
     let prompt = format!("{}> ", "Just".bold().red());
     loop {
         let line = rl.readline(&prompt);
         let line = match line {
             Ok(line) => line,
-            Err(ReadlineError::Interrupted | ReadlineError::Eof) => {
+            Err(ReadlineError::Interrupted) => {
+                eprintln!("ctrl C end");
+                continue;
+            }
+            Err(ReadlineError::Eof) => {
+                eprintln!("ctrl D");
                 break;
             }
             Err(err) => {
